@@ -15,7 +15,36 @@ from sklearn.metrics import euclidean_distances
 from sklearn.decomposition import PCA
 
 ########################
-def getData(ifile='Poz100-Master_v08.csv'):
+def addPoz(data, minCompare=0, maxCompare=50):
+
+    onesToAdd = ['Al Kaline'
+                 ,'Nap Lajoie'
+                 ,'Bob Feller'
+                 ,'Albert Pujols'
+                 ,'Sandy Koufax'
+                 ,'Yogi Berra'
+                 ,'Pedro Martinez'
+                 ,'Warren Spahn'
+                 ,'Jackie Robinson'
+                 ]
+
+    countArray = range(maxCompare, minCompare-1, -1)
+    itr = onesToAdd
+    k = 'Poz'
+
+    data[k] = {}    
+
+    itr = zip(range(50, 50-len(onesToAdd), -1), onesToAdd)
+
+    for i, v in enumerate(itr):
+        irank, name = v[:]
+        if irank>=minCompare and irank<=maxCompare:
+            data[k][name] = irank
+
+    return len(data[k])
+
+########################
+def getData(ifile='Poz100-Master_v08.csv', minCompare=0, maxCompare=50, vbose=0):
     data = {}
 
     lines = [l.strip() for l in open(ifile).readlines()]
@@ -36,6 +65,10 @@ def getData(ifile='Poz100-Master_v08.csv'):
             if i==0:
                 rank = int(s)
                 continue
+            if i>0 and (not (rank>=minCompare and rank<=maxCompare)):
+                if vbose>0:
+                    print 'at rank=', rank, 'continue'
+                continue
             pl = s
             con = cons[i]
             if not con in data:
@@ -45,18 +78,23 @@ def getData(ifile='Poz100-Master_v08.csv'):
     return data
 
 ########################
-def computeSimSc(data, con1, con2, vbose=0):
+def computeSimSc(data, con1, con2, vbose=0, minRank=0, maxRank=50, NPOZ=50):
     x = []
-    if vbose:
-        print '*********************'
-        print 'con', con1, con2
+
     l1 = data[con1]
     l2 = data[con2]
+
+    if vbose:
+        print '*********************'
+        print 'con', con1, len(l1), con2, len(l2)
+
     for name in l1:
         s1 = l1[name]
         if vbose:
             print name, s1, 
-        if name in l2:
+        if len(l2)<NPOZ and 'Poz' in con2:
+            sc = 0
+        elif name in l2:
             s2 = l2[name]
             sc = abs(s2-s1)
             if vbose:
@@ -65,36 +103,64 @@ def computeSimSc(data, con1, con2, vbose=0):
             sc = 50
             if vbose:
                 print '--',
+
         if vbose:
             print sc
-        x.append(sc)
+
+        if s1>=minRank and s1<=maxRank:
+            x.append(sc)
+        else:
+            if vbose>=1:
+                print 'skip', s1, 'not between', minRank, 'and', maxRank
     if vbose:
         print sum(x)
     return pylab.array(x)
 
 ########################
-def getDissim(data, atype, vbose=0):
+def getDissim(data, atype, vbose=0, minRank=0, maxRank=50, NPOZ=50):
+
     ks = data.keys()
 
     matr = pylab.ones(len(ks)**2)
     matr = pylab.reshape(matr, (len(ks), len(ks)))
     scs = []
     names = []
+
     for ik, k_con in enumerate(ks):
         name = ik
         if not k_con in names:
             names.append(k_con)
         for jk, k_pl in enumerate(ks):
 
-            ss = computeSimSc(data, k_con, k_pl, vbose=vbose)
+            ss1 = computeSimSc(data, k_con, k_pl, vbose=vbose, minRank=minRank, maxRank=maxRank, NPOZ=NPOZ)
+            ss2 = computeSimSc(data, k_pl, k_con, vbose=vbose, minRank=minRank, maxRank=maxRank, NPOZ=NPOZ)
+
             
             if atype=='abs':
-                nsc = sum(ss)
+                sc1 = sum(ss1)
+                sc2 = sum(ss2)
             elif atype=='rms':
-                nsc = pylab.sqrt(pylab.mean(ss**2))
+                sc1 = pylab.sqrt(pylab.sum(ss1**2))
+                sc2 = pylab.sqrt(pylab.sum(ss2**2))
             elif atype=='met':
-                nsc = sum(pylab.logical_and(ss!=0, True))
+                sc1 = sum(pylab.logical_and(ss1!=0, True)) 
+                sc2 = sum(pylab.logical_and(ss2!=0, True))
 
+            if vbose>=1:
+                print 'score for ', k_con, k_pl, ss1, sc1, ss2, sc2
+
+            oldsc = sc1 + sc2
+            oldsc *= 0.5
+
+
+            l1 = len(data[k_con])
+            l2 = len(data[k_pl])
+            iscale = min(l1, l2)
+            nsc = oldsc/(1.0*iscale)
+            if vbose>=1:
+                print k_con, k_pl, 'oldsc', oldsc, l1, l2, iscale, 'nsc', nsc
+
+            
             matr[ik][jk] = nsc
             if jk<=ik:
                 continue
@@ -141,7 +207,7 @@ def doDendro(names, dissim, vbose=0,cmetric = 'euclidean'):
 
 
 ########################
-def coutOccurances(data):
+def countOccurances(data):
     ss = {}
     nb = {}
     sumRank = {}
@@ -182,26 +248,9 @@ def coutOccurances(data):
     return xx, nballots, aa
     
 ########################
-if __name__=='__main__':
-
-    atype = 'rms'
+def doMds(data, atype, minRank, maxRank, vbose=0, NPOZ=50, ishow=False):
     seed = numpy.random.RandomState(seed=3)
-
-    ifile = 'Poz100-Master_v08.csv'
-    vbose = 0
-    n2do = 10
-    cmethod = 'single'
-    ishow = True
-    cmetric = 'euclidean'
-
-    for ia, a in enumerate(sys.argv):
-        if a=='-vbose':
-            vbose = int(sys.argv[ia+1])
-        if a=='-atype':
-            atype = sys.argv[ia+1]
-
-    data = getData(ifile)
-    names, dissim, matr = getDissim(data, atype, vbose=vbose)
+    names, dissim, matr = getDissim(data, atype, vbose=vbose, minRank=minRank, maxRank=maxRank, NPOZ=NPOZ)
     print matr
 
     mds = manifold.MDS(n_components=2, max_iter=3000, eps=1e-9, random_state=seed, dissimilarity="precomputed", n_jobs=1)
@@ -209,7 +258,10 @@ if __name__=='__main__':
     print pos
     pylab.clf()
     for i, n in enumerate(names):
-        pylab.text(pos[i][0], pos[i][1], n, family='monospace', size='x-small')
+        if 'Poz' in n:
+            pylab.text(pos[i][0], pos[i][1], n, family='monospace', size='small', color='r')
+        else:
+            pylab.text(pos[i][0], pos[i][1], n, family='monospace', size='x-small')
 
     xmin, xmax = min(pos[:,0]), max(pos[:,0])
     ymin, ymax = min(pos[:,1]), max(pos[:,1])
@@ -218,6 +270,45 @@ if __name__=='__main__':
     pylab.xlim(xmin-dx, xmax+dx)
     pylab.ylim(ymin-dy, ymax+dy)
     pylab.show()
+
+    pass
+ 
+########################
+if __name__=='__main__':
+
+    atype = 'rms'
+
+    ifile = 'Poz100-Master_v08.csv'
+    vbose = 0
+    n2do = 10
+    cmethod = 'single'
+    ishow = True
+    cmetric = 'euclidean'
+    minRank = 0
+    maxRank = 50
+
+    minCompare = 42
+    maxCompare = 50
+
+    for ia, a in enumerate(sys.argv):
+        if a=='-vbose':
+            vbose = int(sys.argv[ia+1])
+        if a=='-atype':
+            atype = sys.argv[ia+1]
+        if a=='-minRank':
+            minRank = int(sys.argv[ia+1])
+        if a=='-maxRank':
+            maxRank = int(sys.argv[ia+1])
+        if a=='-minCompare':
+            minCompare = int(sys.argv[ia+1])
+        if a=='-maxCompare':
+            maxCompare = int(sys.argv[ia+1])
+
+    data = getData(ifile, minCompare=minCompare, maxCompare=maxCompare)
+
+    NPOZ = addPoz(data, minCompare=minCompare, maxCompare=maxCompare)
+
+    doMds(data, atype, minRank, maxRank, vbose=vbose, NPOZ=NPOZ, ishow=True)
     
 
 #    doDendro(names, dissim, vbose=0,cmetric = 'euclidean')
