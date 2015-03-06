@@ -2,7 +2,7 @@
 
 import os, sys
 import pylab
-import numpy
+import numpy as np
 import scipy
 import scipy.cluster
 import datetime
@@ -15,7 +15,7 @@ from sklearn.metrics import euclidean_distances
 from sklearn.decomposition import PCA
 
 ########################
-def addPoz(data, minCompare=0, maxCompare=50):
+def addPoz(data, minRank=0, maxRank=50):
 
     onesToAdd = ['Al Kaline'
                  ,'Nap Lajoie'
@@ -26,9 +26,12 @@ def addPoz(data, minCompare=0, maxCompare=50):
                  ,'Pedro Martinez'
                  ,'Warren Spahn'
                  ,'Jackie Robinson'
+                 ,'Pete Rose'
+                 ,'Eddie Collins'
+
                  ]
 
-    countArray = range(maxCompare, minCompare-1, -1)
+    countArray = range(maxRank, minRank-1, -1)
     itr = onesToAdd
     k = 'Poz'
 
@@ -38,14 +41,17 @@ def addPoz(data, minCompare=0, maxCompare=50):
 
     for i, v in enumerate(itr):
         irank, name = v[:]
-        if irank>=minCompare and irank<=maxCompare:
+        if irank>=minRank and irank<=maxRank:
             data[k][name] = irank
 
     return len(data[k])
 
 ########################
-def getData(ifile='Poz100-Master_v08.csv', minCompare=0, maxCompare=50, vbose=0):
+def getData(ifile='Poz100-Master_v08.csv', minRank=0, maxRank=50, vbose=0):
+    # data has contestant as key
     data = {}
+    # nn has prediction as key
+    nn = {}
 
     lines = [l.strip() for l in open(ifile).readlines()]
 
@@ -64,8 +70,10 @@ def getData(ifile='Poz100-Master_v08.csv', minCompare=0, maxCompare=50, vbose=0)
         for i, s in enumerate(st[0:]):
             if i==0:
                 rank = int(s)
+                if not rank in nn:
+                    nn[rank] = {}
                 continue
-            if i>0 and (not (rank>=minCompare and rank<=maxCompare)):
+            if i>0 and (not (rank>=minRank and rank<=maxRank)):
                 if vbose>0:
                     print 'at rank=', rank, 'continue'
                 continue
@@ -75,7 +83,11 @@ def getData(ifile='Poz100-Master_v08.csv', minCompare=0, maxCompare=50, vbose=0)
                 data[con] = {}
             data[con][pl] = rank
 
-    return data
+            if not pl in nn[rank]:
+                nn[rank][pl] = 0
+            nn[rank][pl] += 1
+
+    return data, nn
 
 ########################
 def computeSimSc(data, con1, con2, vbose=0, minRank=0, maxRank=50, NPOZ=50):
@@ -191,12 +203,12 @@ def doDendro(names, dissim, vbose=0,cmetric = 'euclidean'):
             thisid = thisid.split()[-1]
             ivl.append(thisid)
 
-        ivl = numpy.array(ivl, dtype='S10')
+        ivl = np.array(ivl, dtype='S10')
         ivw = len(ivl) * 10
 
         ivlpl = ivl[:]
             
-        ivticks = numpy.arange(5, len(ivlpl)*10+5, 10)
+        ivticks = np.arange(5, len(ivlpl)*10+5, 10)
         pylab.xticks(ivticks, ivlpl, rotation=+33, size='small')
 
         axis = pylab.gca()
@@ -248,8 +260,50 @@ def countOccurances(data):
     return xx, nballots, aa
     
 ########################
+def rotateData(names, pos, name='Poz', name2='fWAR', vbose=0):
+
+    flipX = flipY = +1
+
+    for i, v in enumerate(names):
+        if v==name:
+            xpos, ypos = pos[i][:]
+            theta = pylab.arctan2(xpos, ypos)
+
+
+    for i, v in enumerate(names):
+        xpos, ypos = pos[i][:]
+
+        nxpos = xpos*pylab.cos(theta) - ypos*pylab.sin(theta)
+        nypos = xpos*pylab.sin(theta) + ypos*pylab.cos(theta)        
+
+        pos[i][0] = nxpos
+        pos[i][1] = nypos
+
+        if vbose>=1:
+            print v, 'oldpos', xpos, ypos, 'newpos(rota)', nxpos, nypos
+
+    for i, v in enumerate(names):
+        if v==name2:
+            x2, y2 = pos[i][:]
+            if x2<0:
+                flipX = -1
+            if y2>0:
+                flixY = -1
+
+    for i, v in enumerate(names):
+        xpos, ypos = pos[i][:]
+        nxpos = xpos*flipX
+        nypos = ypos*flipY
+        pos[i][0] = nxpos
+        pos[i][1] = nypos
+        if vbose>=1:
+            print v, 'oldpos', xpos, ypos, 'newpos(flip)', nxpos, nypos
+
+    return 
+
+########################
 def doMds(data, atype, minRank, maxRank, vbose=0, NPOZ=50, ishow=False):
-    seed = numpy.random.RandomState(seed=3)
+    seed = np.random.RandomState(seed=3)
     names, dissim, matr = getDissim(data, atype, vbose=vbose, minRank=minRank, maxRank=maxRank, NPOZ=NPOZ)
     print matr
 
@@ -257,6 +311,8 @@ def doMds(data, atype, minRank, maxRank, vbose=0, NPOZ=50, ishow=False):
     pos = mds.fit(matr).embedding_
     print pos
     pylab.clf()
+
+    rotateData(names, pos, vbose=vbose)
     for i, n in enumerate(names):
         if 'Poz' in n:
             pylab.text(pos[i][0], pos[i][1], n, family='monospace', size='small', color='r')
@@ -269,10 +325,69 @@ def doMds(data, atype, minRank, maxRank, vbose=0, NPOZ=50, ishow=False):
     dy = 0.05*(ymax-ymin)
     pylab.xlim(xmin-dx, xmax+dx)
     pylab.ylim(ymin-dy, ymax+dy)
-    pylab.show()
 
-    pass
+    if ishow:
+        pylab.show()
+
+    return zip(names, pos)
  
+########################
+def doCsvLoop(ifile, atype, minRank, maxRank, vbose=0, ofile='poz100_mds.csv'):
+
+    ofp = open(ofile, 'w')
+    ofp.write('minRank,name,xpos,ypos\n')
+    for r in range(maxRank, minRank-1, -1):
+        minR = r
+        maxR = maxRank
+        data, nn = getData(ifile, minRank=minR, maxRank=maxR)
+        NPOZ = addPoz(data, minRank=minR, maxRank=maxR)
+        ans = doMds(data, atype, minRank, maxRank, vbose=vbose, NPOZ=NPOZ, ishow=False)
+
+        scale = 0.0
+        sortme = []
+        for i, v in enumerate(ans):
+            name = v[0]
+            xpos, ypos = v[1][:]
+            rad = pylab.sqrt(xpos**2+ypos**2)
+            if rad>scale:
+                scale = rad
+            sortme.append([name, xpos, ypos])
+
+        sortme.sort()
+        for i, v in enumerate(sortme):
+            name = v[0]
+            xpos, ypos = v[1], v[2]
+            ofp.write('%d,%s,%.4f,%.4f\n' % (r, name, xpos/scale, ypos/scale))
+    ofp.close()
+
+########################
+def doPercentiles(data, pozFile):
+    import mlb
+    m = mlb.mlb()
+    pp = {}
+    for c in data.keys():
+        g = data[c]
+        for k in g.keys():
+            if not k in pp:
+                pp[k] = []
+            pp[k].append(g[k])
+
+    poz = m.csvToArray('pozAnswers.csv', ikeys=['rank'], skeys=['name'])
+
+    tot  = len(pp['Babe Ruth']) # everyone picked babe ruth!
+    tot = 1.0*tot
+
+    for d in poz:
+        r = d['rank']
+        k = d['name']
+        pk = np.array(pp[k])
+
+        f = (1.0*len(pk))/tot
+        print '%5.2f %5.2f %5.2f %5.2f %s ' % (f, 100*sum(pk<r)/tot, 100*sum(pk==r)/tot, 100*sum(pk>=r)/tot, k)
+#        plt.clf()
+#        plt.hist(np.array(pk)-r, bins=41)
+#        plt.show()
+
 ########################
 if __name__=='__main__':
 
@@ -287,8 +402,10 @@ if __name__=='__main__':
     minRank = 0
     maxRank = 50
 
-    minCompare = 42
-    maxCompare = 50
+    minRank = 40
+    maxRank = 50
+
+    iCsvLoop = False
 
     for ia, a in enumerate(sys.argv):
         if a=='-vbose':
@@ -299,17 +416,37 @@ if __name__=='__main__':
             minRank = int(sys.argv[ia+1])
         if a=='-maxRank':
             maxRank = int(sys.argv[ia+1])
-        if a=='-minCompare':
-            minCompare = int(sys.argv[ia+1])
-        if a=='-maxCompare':
-            maxCompare = int(sys.argv[ia+1])
+        if a=='-csvLoop':
+            iCsvLoop = bool(int(sys.argv[ia+1]))
 
-    data = getData(ifile, minCompare=minCompare, maxCompare=maxCompare)
+    if iCsvLoop:
+        doCsvLoop(ifile, atype, minRank, maxRank, vbose=vbose)
+        sys.exit()
 
-    NPOZ = addPoz(data, minCompare=minCompare, maxCompare=maxCompare)
+    data, nn = getData(ifile, minRank=minRank, maxRank=maxRank)
 
-    doMds(data, atype, minRank, maxRank, vbose=vbose, NPOZ=NPOZ, ishow=True)
-    
+    NPOZ = addPoz(data, minRank=minRank, maxRank=maxRank)
+
+    ans = doMds(data, atype, minRank, maxRank, vbose=vbose, NPOZ=NPOZ, ishow=True)
+
+    ofile = 'poz100_%d.csv' % minRank
+    ofp = open(ofile, 'w')
+    ofp.write('name,xpos,ypos\n')
+
+    for i, v in enumerate(ans):
+        name = v[0]
+        xpos, ypos = v[1][:]
+        if name=='fivetwentyone':
+            theta = pylab.arctan2(xpos, ypos)
+            
+    for i, v in enumerate(ans):
+        name = v[0]
+        xpos, ypos = v[1][:]
+        if name=='Poz' and minRank<42:
+            xpos = -1.0
+            ypos = +1.0
+        ofp.write('%s,%.4f,%.4f\n' % (name, xpos, ypos))
+    ofp.close()
 
 #    doDendro(names, dissim, vbose=0,cmetric = 'euclidean')
 
