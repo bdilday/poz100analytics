@@ -8,8 +8,8 @@ get_data = function(conn = NULL, dfX = NULL){
   if (is.null(conn)) {
     conn <- dbConnect(RPostgres::Postgres(),
                       password=Sys.getenv("PSQL_PASS"),
-                      user==Sys.getenv("PSQL_USER"),
-                      port==Sys.getenv("PSQL_PORT"),
+                      user=Sys.getenv("PSQL_USER"),
+                      port=Sys.getenv("PSQL_PORT"),
                       dbname='retrosheet')
   }
 
