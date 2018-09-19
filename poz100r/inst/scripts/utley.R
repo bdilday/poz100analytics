@@ -4,6 +4,7 @@ library(magrittr)
 library(ggplot2)
 library(tidyr)
 library(stringr)
+library(ggrepel)
 
 pl_lkup = Lahman::Master %>%
   dplyr::select(bbrefID, nameLast, nameFirst, birthYear) %>%
@@ -15,18 +16,69 @@ nameAbbv = paste(
 
 pl_lkup$nameAbbv = nameAbbv
 
-analyze3 = function(war_df) {
+harmonic_mean = function(war_df) {
 
-  dseq = seq(0, 1, 0.01)
+  best_hm = war_df %>%
+    filter(WAR>0.1, WAR_off > 0.1, WAR_def > 0.1) %>%
+    mutate(z=2/(1/WAR_off+1/WAR_def)) %>%
+    # group_by(playerID) %>%
+    # filter(z==max(z)) %>%
+    # ungroup() %>%
+     filter(z>=3.75) %>%
+    merge(pl_lkup, by="playerID") %>%
+    mutate(k = sprintf("%s (%d)", nameLast, yearID))
+
+  p1 = war_df %>%
+    filter(WAR>0.1, WAR_off > 0.1, WAR_def > 0.1) %>%
+    mutate(z=2/(1/WAR_off+1/WAR_def)) %>%
+    ggplot(aes(x=WAR_off, y=WAR_def)) +
+    geom_point(alpha=0.3) + facet_wrap(~POS) +
+    geom_point(data=best_hm, size=2, color='steelblue') +
+    geom_text_repel(data=best_hm, aes(label=k))
+
+}
+
+graph_best_off_def = function(b3) {
+
+  p = b3 %>%
+    ggplot(aes(x=d, y=wrank, group=playerID)) +
+    geom_line() +
+    facet_wrap(~k) + ylim(21, 0) +
+    labs(x="offense / defense split", y="player-position all-time rank")
+
+}
+
+best_by_off_def_tradeoff = function(war_df, brank=10, exp_tau=5) {
+  a3 = analyze3(war_df, wlim = 1000, exp_tau = exp_tau)
+  b3 = a3 %>%
+    group_by(playerID) %>%
+    mutate(best_rank=min(wrank)) %>%
+    ungroup() %>% filter(best_rank <= brank)
+
+  b3 = b3 %>% mutate(k=sprintf("%s (%s)", nameFull, POS))
+  lev_ord = b3 %>%
+    group_by(POS, playerID, k) %>%
+    summarise() %>%
+    arrange(POS, playerID) %$% k %>% unlist()
+
+  b3$k = factor(b3$k, levels = lev_ord)
+
+  b3
+
+}
+
+analyze3 = function(war_df, wlim=20, exp_tau=5) {
+
+  dseq = seq(0, 1, 0.02)
   ll = lapply(dseq, function(d) {
-    a = top_lists(war_df, max_year = 12,
+    a = top_lists(war_df %>% filter(yearID>=1901), max_year = 21,
                   baseline_value = 0,
-                  off_def_split = d, exp_tau = 5)
+                  off_def_split = d, exp_tau = exp_tau)
 
     w = a %>% filter(grepl('Utley', nameFull)) %$% wrank
 
 #    list(w=w, )
-  a = a %>% head(20)
+  a = a %>% head(wlim)
   a$w = w
   a$d = d
   a = a %>% mutate(r = rank(-weighted_war, ties.method = "first"))
@@ -147,8 +199,8 @@ top_lists = function(war_df,
     left_join(pl_lkup, by="playerID") %>%
     mutate(nameFull =
              paste(stringr::str_sub(nameFirst, 1, 1), nameLast)) %>%
-    dplyr::select(-bbrefID, -nameFirst, -nameLast, -playerID) %>%
-    dplyr::select(wrank, POS, weighted_war, nameFull)
+    dplyr::select(-bbrefID, -nameFirst, -nameLast) %>%
+    dplyr::select(wrank, POS, weighted_war, nameFull, playerID)
 }
 
 
