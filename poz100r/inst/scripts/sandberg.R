@@ -4,6 +4,7 @@ library(magrittr)
 library(ggplot2)
 library(tidyr)
 library(zoo)
+library(stringr)
 
 pl_lkup = Lahman::Master %>% dplyr::select(playerID, retroID, bbrefID, nameFirst, nameLast)
 pl_lkup$nameAbbv = paste(stringr::str_sub(pl_lkup$nameFirst, 1, 1), pl_lkup$nameLast, sep='.')
@@ -42,7 +43,7 @@ generate_comp_df = function(b, stat_names) {
   dmat = tmp %>% '^'(2) %>% rowSums() %>% sqrt()
 
   tmp$dmat = dmat
-  df %>% cbind(tmp) %>% as_tibble() %>% filter(player_season2 > player_season1)
+  df %>% cbind(tmp) %>% as_tibble() %>% filter(player_season2 != player_season1)
 }
 
 lapply_weighted_dist = function(b, stat_names) {
@@ -130,6 +131,47 @@ compute_season_distances = function(b) {
 
 }
 
+distance_result_to_table = function(df1, do_summary=FALSE) {
+
+  strip_pid = function(pid_key) {
+    str_split(pid_key, "_")[[1]][1]
+  }
+
+  strip_yr = function(pid_key) {
+    str_split(pid_key, "_")[[1]][2]
+  }
+
+  pid1=sapply(1:nrow(df1), function(i) {
+    tmp = data.frame(p=strip_pid(df1[i, "player_season1"]), stringsAsFactors = F)
+    tmp %>% merge(pl_lkup, by.x="p", by.y="playerID") %>% select(nameAbbv) %>% unlist()
+  })
+
+  pid2=sapply(1:nrow(df1), function(i) {
+    tmp = data.frame(p=strip_pid(df1[i, "player_season2"]), stringsAsFactors = F)
+    tmp %>% merge(pl_lkup, by.x="p", by.y="playerID") %>% select(nameAbbv) %>% unlist()
+  })
+
+  yr1=sapply(1:nrow(df1), function(i) {
+    strip_yr(df1[i, "player_season1"])
+  })
+
+  yr2=sapply(1:nrow(df1), function(i) {
+    strip_yr(df1[i, "player_season2"])
+  })
+
+  df_tab =
+    data.frame(pid1=pid1, yr1=yr1,
+               pid2=pid2, yr2=yr2, stringsAsFactors = F) %>%
+    cbind.data.frame(df1[,3:ncol(df1)])
+
+  if (do_summary) {
+    df_tab = df_tab %>%
+      mutate(dmat = sprintf("%.2f", dmat)) %>%
+      select(name=pid2, season=yr2, distance = dmat)
+  }
+
+  df_tab
+}
 
 inspect_result = function(res) {
   r1 = b %>% filter(playerID==res$pid1, yearID==res$year1)
