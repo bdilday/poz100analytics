@@ -81,9 +81,10 @@ derive_cov_mat = function(b, stat_names) {
   }) %>% dplyr::bind_cols()
 
   cov_mat = cov(player_data)
+  cor_mat = cor(player_data)
   mm = solve(chol(cov_mat))
 
-  list(player_data = player_data, cov_mat = cov_mat)
+  list(player_data = player_data, cov_mat = cov_mat, cor_mat = cor_mat)
 
 }
 
