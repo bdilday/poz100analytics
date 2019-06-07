@@ -334,11 +334,23 @@ make_3b_plot = function(war_df, bo=NULL) {
   p_rank = plot_df %>%
     ggplot(aes(x=d, y=wrank, color=nameFull)) +
     geom_line() + geom_point() +
-    scale_y_reverse() + theme_minimal(base_size = 18)
+    scale_y_reverse() + theme_minimal(base_size = 18) +
+    scale_color_brewer(palette=2, type = "qual") +
+    labs(x="peak vs. career scale",
+         y="positional rank",
+         color="",
+         title="Top third-basemen")
 
   p_war = plot_df %>%
     ggplot(aes(x=d, y=weighted_war, color=nameFull)) +
-    geom_line() + geom_point() + theme_minimal(base_size = 18)
+    geom_line() + geom_point() + theme_minimal(base_size = 18) +
+    scale_color_brewer(palette=2, type = "qual") +
+    labs(x="peak vs. career scale",
+         y="weighted WAR",
+         color="",
+         title="Top third-basemen")
+
+
 
   list(p_rank, p_war)
 }
