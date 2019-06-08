@@ -336,7 +336,7 @@ make_3b_plot = function(war_df, bo=NULL) {
     geom_line() + geom_point() +
     scale_y_reverse() + theme_minimal(base_size = 18) +
     scale_color_brewer(palette=2, type = "qual") +
-    labs(x="peak vs. career scale",
+    labs(x="peak vs. career decay-scale",
          y="positional rank",
          color="",
          title="Top third-basemen")
@@ -345,7 +345,7 @@ make_3b_plot = function(war_df, bo=NULL) {
     ggplot(aes(x=d, y=weighted_war, color=nameFull)) +
     geom_line() + geom_point() + theme_minimal(base_size = 18) +
     scale_color_brewer(palette=2, type = "qual") +
-    labs(x="peak vs. career scale",
+    labs(x="peak vs. career decay-scale",
          y="weighted WAR",
          color="",
          title="Top third-basemen")
@@ -353,4 +353,52 @@ make_3b_plot = function(war_df, bo=NULL) {
 
 
   list(p_rank, p_war)
+}
+
+plot_war_3vs12 = function(war_df) {
+  top10 = war_df %>%
+    group_by(playerID) %>%
+    mutate(r=rank(-WAR, ties.method = "first")) %>%
+    mutate(i1=as.integer(r<=3), i2=as.integer(r>3 & r<=15)) %>%
+    filter(i1+i2>=1) %>%
+    mutate(WAR1=WAR*i1, WAR2=WAR*i2) %>%
+    summarise(WAR=sum(WAR),
+              WAR1=sum(WAR1)/3,
+              WAR2=sum(WAR2) / sum(i2)) %>%
+    mutate(z=(WAR2)/WAR1) %>% filter(WAR>0, WAR1>0, WAR2>0) %>%
+    arrange(z) %>%
+    filter(WAR1 >= 8) %>%
+    head(10) %$% playerID
+
+  other10 = war_df %>%
+    group_by(playerID) %>%
+    mutate(r=rank(-WAR, ties.method = "first")) %>%
+    mutate(i1=as.integer(r<=3), i2=as.integer(r>3 & r<=15)) %>%
+    filter(i1+i2>=1) %>%
+    mutate(WAR1=WAR*i1, WAR2=WAR*i2) %>%
+    summarise(WAR=sum(WAR),
+              WAR1=sum(WAR1)/3,
+              WAR2=sum(WAR2) / sum(i2)) %>%
+    mutate(z=(WAR2)/WAR1) %>% filter(WAR>0, WAR1>0, WAR2>0) %>%
+    arrange(-z) %>%
+    filter(WAR1 >= 8) %>%
+    head(10) %$% playerID
+
+  plot_df = war_df %>%
+    group_by(playerID) %>%
+    mutate(r=rank(-WAR)) %>%
+    mutate(i1=as.integer(r<=3), i2=as.integer(r>3 & r<=15)) %>%
+    mutate(WAR1=WAR*i1, WAR2=WAR*i2) %>%
+    summarise(WAR=sum(WAR), WAR1=sum(WAR1)/sum(i1), WAR2=sum(WAR2)/sum(i2)) %>%
+    ungroup() %>% merge(pl_lkup, by = "playerID")
+
+  p = plot_df %>% ggplot(aes(x=WAR1,y=WAR2)) +
+    geom_point() +
+    geom_text_repel(data=plot_df %>% filter(playerID %in% top10),
+                    aes(label=nameAbbv), color="red4") +
+    geom_text_repel(data=plot_df %>% filter(playerID %in% other10),
+                    aes(label=nameAbbv), color="steelblue")
+
+  p + theme_minimal(base_size = 18) + labs(x="Avg. WAR (top 3 seasons)", y="Avg. WAR (next 12 seasons)")
+
 }
