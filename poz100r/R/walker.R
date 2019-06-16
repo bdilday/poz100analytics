@@ -215,9 +215,9 @@ catcher_rankings = function(lmer_mod, df) {
   list(yearly = yearly, career = career)
 }
 
-do_lmer_mod = function(df) {
-  lmer_mod = lmer(woba_pts ~ 1 + (1|pit_key) + (0+bat_home_id | bat_key) + year_id + (1|home_team_id), data=dfX)
-  saveRDS(lmer_mod, "lmer_mod_nocorr_walker.rds")
+do_lmer_mod = function(dfX) {
+  lmer_mod = lmer(woba_pts ~ 1 + (1|pit_key) + (bat_home_id || bat_key) + year_id + (1|home_team_id), data=dfX)
+  saveRDS(lmer_mod, "lmer_mod_nocorr_small_walker.rds")
   rr = ranef(lmer_mod)
-  saveRDS(rr, "lmer_mod_ranef_nocorr_walker.rds")
+  saveRDS(rr, "lmer_mod_ranef_nocorr_small_walker.rds")
 }
