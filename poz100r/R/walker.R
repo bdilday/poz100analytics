@@ -187,37 +187,15 @@ ranef_to_df = function(lmer_mod, ranef_nm, rr=NULL) {
 }
 
 
-catcher_rankings = function(lmer_mod, df) {
-  pl_lkup = Lahman::Master %>% mutate(nameFull = paste(nameFirst, nameLast)) %>%
-    dplyr::select(retroID, nameFull)
-
-
-  rf = parse_ranefs(lmer_mod)
-  aa = rf %>%
-    filter(ranef_nm == "def_catcher") %>%
-    merge(df, by.x="k", by.y="def_catcher")
-
-  aa$catcher_id = sapply(str_split(aa$k, "_"), function(s) {s[[1]]})
-  aa$season = sapply(str_split(aa$k, "_"), function(s) {s[[2]]})
-  career = aa %>%
-    group_by(catcher_id) %>%
-    summarise(m=mean(value), s=sum(value)) %>% arrange(m) %>%
-    mutate(r = row_number()) %>% ungroup() %>%
-    merge(pl_lkup, by.x="catcher_id", by.y="retroID")
-
-  yearly = aa %>%
-    group_by(catcher_id, season) %>%
-    summarise(m=mean(value), s=sum(value)) %>% arrange(m) %>%
-    ungroup() %>%
-    mutate(r = row_number()) %>% ungroup() %>%
-    merge(pl_lkup, by.x="catcher_id", by.y="retroID")
-
-  list(yearly = yearly, career = career)
-}
 
 do_lmer_mod = function(dfX) {
-  lmer_mod = lmer(woba_pts ~ 1 + (1|pit_key) + (bat_home_id || bat_key) + year_id + (1|home_team_id), data=dfX)
-  saveRDS(lmer_mod, "lmer_mod_nocorr_small_walker.rds")
+  lmer_mod = lmer(
+    woba_pts ~
+      1 +
+      (1|pit_key) +
+      (1 + home_team_id | bat_key) +
+      year_id, data=dfX)
+  saveRDS(lmer_mod, "lmer_mod_X_walker.rds")
   rr = ranef(lmer_mod)
-  saveRDS(rr, "lmer_mod_ranef_nocorr_small_walker.rds")
+  saveRDS(rr, "lmer_mod_ranef_X_walker.rds")
 }
