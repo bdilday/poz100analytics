@@ -154,6 +154,7 @@ analyze1 = function(war_df, dw = 1) {
 
 
 }
+
 get_war_df = function() {
   war_df = readr::read_csv("https://gist.githubusercontent.com/bdilday/28621eb7b91f42d7b90d56475f098cf3/raw/0216fb7fe917695db4b5e90070d90dd3116a6dcf/war_data.csv", guess_max = 1000000)
 }
