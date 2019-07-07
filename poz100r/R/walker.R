@@ -7,7 +7,7 @@ library(stringr)
 library(ggplot2)
 library(htmlTable)
 library(magrittr)
-
+library(grcdr)
 
 pl_lkup = Lahman::Master %>%
   select(playerID, retroID, bbrefID, nameFirst, nameLast)
@@ -198,4 +198,51 @@ do_lmer_mod = function(dfX) {
   saveRDS(lmer_mod, "lmer_mod_X_walker.rds")
   rr = ranef(lmer_mod)
   saveRDS(rr, "lmer_mod_ranef_X_walker.rds")
+}
+
+load_br_data_career = function() {
+  br_war = readr::read_csv("~/Downloads/war_daily_bat.txt", guess_max = 1000000) %>%
+    mutate(age = as.numeric(age)) %>%
+    mutate(runs_bat = as.numeric(runs_bat)) %>%
+    mutate(runs_br = as.numeric(runs_br)) %>%
+    mutate(runs_defense = as.numeric(runs_defense)) %>%
+    mutate(PA = as.numeric(PA))
+
+  br_war %>% group_by(player_ID) %>%
+    summarise(PA=sum(PA),
+              runs_bat=sum(runs_bat),
+              runs_br = sum(runs_br),
+              runs_defense = sum(runs_defense)) %>% ungroup()
+}
+
+make_tail_scatter1 = function(war_df, min_pa=100) {
+  lab_df1 = war_df %>% filter(runs_defense < -200, runs_br> 10)
+  lab_df2 = war_df %>% filter(player_ID=="walkela01")
+  lab_df3 = war_df %>% filter(runs_defense < -150, runs_bat >= 100)
+  lab_df4 = war_df %>% filter(runs_br >= 75, runs_defense >= -150)
+  lab_df5 = war_df %>% filter(runs_br >= 100)
+  lab_df6 = war_df %>% filter(runs_br >= 20, runs_defense>=50, runs_bat>=500)
+  lab_df7 = war_df %>% filter(runs_br >= 45, runs_defense >= 100)
+
+  lab_df = dplyr::bind_rows(lab_df1,
+                            lab_df2,
+                            lab_df3,
+                            lab_df4,
+                            lab_df5,
+                            lab_df6,
+                            lab_df7
+                            )
+  lab_df %<>% merge(pl_lkup, by.x = "player_ID", by.y="bbrefID") %>%
+    distinct()
+
+  war_df %>%
+    filter(PA >= min_pa) %>%
+    ggplot(aes(x=runs_defense, y=runs_br)) +
+    geom_tailscatter(aes(x3=runs_bat)) +
+    geom_point(data=w, size=3, color="steelblue") +
+    theme_minimal(base_size = 18) +
+    labs(x="runs (defense)", y="runs (base running)", title="Career runs - bat, base-running, defense") +
+    geom_text_repel(data=lab_df, aes(label=nameAbbv))
+
+
 }
